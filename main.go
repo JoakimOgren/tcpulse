@@ -31,7 +31,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -179,8 +178,9 @@ func runServer() error {
 		return fmt.Errorf("setting file limit: %w", err)
 	}
 
+	// Use cross-platform signal handling
 	ctx, stop := signal.NotifyContext(
-		context.Background(), unix.SIGINT, unix.SIGTERM)
+		context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if listenAddrsFile != "" {
@@ -232,7 +232,8 @@ func runClient() error {
 
 	setPprofServer()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// Use cross-platform signal handling
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := SetRLimitNoFile(); err != nil {
@@ -304,26 +305,6 @@ func setPprofServer() {
 			slog.Error("pprof server error", "error", err)
 		}
 	}()
-}
-
-// SetRLimitNoFile avoids too many open files error.
-func SetRLimitNoFile() error {
-	var rLimit syscall.Rlimit
-
-	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return fmt.Errorf("could not get rlimit: %w", err)
-	}
-
-	if rLimit.Cur < rLimit.Max {
-		rLimit.Cur = rLimit.Max
-		err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-		if err != nil {
-			return fmt.Errorf("could not set rlimit: %w", err)
-		}
-	}
-
-	return nil
 }
 
 func getAddrsFromFile(path string) ([]string, error) {
